@@ -1,9 +1,10 @@
 package server
 
 import (
+	"bytes"
+	"encoding/gob"
 	"log"
 	"net"
-	"strings"
 
 	"distrokv/internal/lsm"
 	"distrokv/internal/raft"
@@ -11,6 +12,13 @@ import (
 
 	"google.golang.org/grpc"
 )
+
+// Command represents a state machine operation
+type Command struct {
+	Op    string
+	Key   string
+	Value []byte
+}
 
 type Server struct {
 	proto.UnimplementedRaftServiceServer
@@ -83,20 +91,22 @@ func (s *Server) applyCommits() {
 		case <-s.stopCh:
 			return
 		case entry := <-s.commitCh:
-			cmd := string(entry.Command)
-			// Naive parsing: "PUT key val" or "DELETE key"
-			// This is very fragile but works for MVP "Purist" demo without importing heavy libs
-			// A real system would use Gob or Protobuf for the LogEntry Command field too.
+			var cmd Command
+			dec := gob.NewDecoder(bytes.NewReader(entry.Command))
+			if err := dec.Decode(&cmd); err != nil {
+				log.Printf("[%s] Failed to decode command: %v", s.id, err)
+				continue
+			}
 
-			if len(cmd) > 4 && cmd[:3] == "PUT" {
-				// Naive parsing: "PUT key val"
-				parts := strings.SplitN(cmd, " ", 3)
-				if len(parts) == 3 {
-					s.lsmStore.Put(parts[1], []byte(parts[2]))
-					log.Printf("[%s] Applied: PUT %s=%s", s.id, parts[1], parts[2])
-				} else {
-					log.Printf("[%s] Failed to parse: %s", s.id, cmd)
-				}
+			switch cmd.Op {
+			case "PUT":
+				s.lsmStore.Put(cmd.Key, cmd.Value)
+				log.Printf("[%s] Applied: PUT %s=(%d bytes)", s.id, cmd.Key, len(cmd.Value))
+			case "DELETE":
+				// s.lsmStore.Delete(cmd.Key) // MVP: Add Delete to Store if not exists
+				log.Printf("[%s] Applied: DELETE %s", s.id, cmd.Key)
+			default:
+				log.Printf("[%s] Unknown Op: %s", s.id, cmd.Op)
 			}
 		}
 	}

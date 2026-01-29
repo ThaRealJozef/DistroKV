@@ -1,8 +1,10 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"distrokv/proto"
+	"encoding/gob"
 	"errors"
 )
 
@@ -16,15 +18,18 @@ func (s *Server) Put(ctx context.Context, req *proto.PutRequest) (*proto.PutResp
 	}
 
 	// 2. Submit to Raft
-	// Command Format: "PUT key value" (Simple text for now, or binary)
-	// For MVP, let's keep it abstract. Ideally serialize Op struct.
-	// We'll trust the Apply loop to handle it.
+	cmd := Command{
+		Op:    "PUT",
+		Key:   req.Key,
+		Value: req.Value,
+	}
 
-	// Create a simple command payload
-	// Format: "PUT key value"
-	cmd := "PUT " + req.Key + " " + string(req.Value)
+	var buf bytes.Buffer
+	if err := gob.NewEncoder(&buf).Encode(cmd); err != nil {
+		return nil, err
+	}
 
-	success, err := s.raftNode.Submit([]byte(cmd))
+	success, err := s.raftNode.Submit(buf.Bytes())
 	if err != nil {
 		return nil, err
 	}
