@@ -1,0 +1,21 @@
+# Binaries
+/bin/
+*.exe
+*.dll
+
+# Data
+*.log
+*.db
+wal.log
+
+# IDE
+.vscode/
+.idea/
+
+# Docs
+docs/
+*.md
+
+# Go
+vendor/
+go.sum
