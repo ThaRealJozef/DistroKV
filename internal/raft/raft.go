@@ -46,19 +46,29 @@ type Raft struct {
 	id string
 
 	// Channels for signaling
-	stopCh   chan struct{}
+	stopCh chan struct{}
+	// Persistent storage
+	storage  *Storage
 	commitCh chan<- *proto.LogEntry // Channel to send committed entries to FSM
 }
 
 func NewRaft(id string, commitCh chan<- *proto.LogEntry) *Raft {
+	// MVP: Hardcode raft state path to "raft_state.json" in current dir
+	// In production, pass storageDir config.
+	storage := NewStorage("raft_state.json")
+
+	// Load State
+	state, _ := storage.Load() // Ignore error for MVP (defaults to 0)
+
 	return &Raft{
 		id:          id,
 		state:       Follower,
-		currentTerm: 0,
-		votedFor:    "",
+		currentTerm: state.CurrentTerm,
+		votedFor:    state.VotedFor,
 		log:         make([]*proto.LogEntry, 0),
 		stopCh:      make(chan struct{}),
 		commitCh:    commitCh,
+		storage:     storage,
 	}
 }
 
@@ -70,6 +80,15 @@ func (r *Raft) Start() error {
 func (r *Raft) Stop() error {
 	close(r.stopCh)
 	return nil
+}
+
+// persist saves the current HardState to disk
+func (r *Raft) persist() {
+	state := HardState{
+		CurrentTerm: r.currentTerm,
+		VotedFor:    r.votedFor,
+	}
+	r.storage.Save(state)
 }
 
 // Basic placeholder for election timer
@@ -172,12 +191,14 @@ func (r *Raft) RequestVote(req *proto.RequestVoteRequest) (*proto.RequestVoteRes
 		r.currentTerm = req.Term
 		r.state = Follower
 		r.votedFor = ""
+		r.persist()
 	}
 
 	if r.votedFor == "" || r.votedFor == req.CandidateId {
 		// simpler log check for now (MVP)
 		r.votedFor = req.CandidateId
 		resp.VoteGranted = true
+		r.persist()
 	}
 
 	return resp, nil
