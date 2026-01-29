@@ -58,6 +58,13 @@ func (m *MemTable) Size() int {
 	return m.size
 }
 
+// KeyCount returns the number of keys.
+func (m *MemTable) KeyCount() int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return len(m.data)
+}
+
 func (m *MemTable) Clear() {
 	m.mu.Lock()
 	defer m.mu.Unlock()

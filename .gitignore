@@ -7,6 +7,8 @@
 *.log
 *.db
 wal.log
+*.sst
+raft_state.json
 
 # IDE
 .vscode/

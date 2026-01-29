@@ -65,22 +65,32 @@ go build -o bin/client.exe ./cmd/client
 
 # Read Data
 ./bin/client.exe -addr localhost:50051 -op get -key user:101
+
+### 🧪 Live Demo (Performance Check)
+Run the verification script to demonstrate **memtable flushing, bloom filters, and compaction**:
+```powershell
+./verify_flush.ps1
+```
 ```
 
 ## 🛠️ Technical Details
 
 ### Implemented Features
-- **Raft Leader Election:** Randomized election timeouts, Term management.
-- **Log Replication:** AppendEntries RPC, Consistency checks.
-- **LSM Storage:** 
-    - **MemTable:** In-memory mutable storage (thread-safe).
-    - **WAL:** Append-only log for durability.
-    - **SSTable:** Immutable disk files (sorted flush).
-- **Network:** gRPC streaming and unary calls.
+- **Raft Consensus:** 
+    - Leader Election (Term management, randomized timeouts).
+    - Log Replication (AppendEntries).
+    - **Safety:** HardState persistence (`raft_state.json`).
+- **LSM Storage Engine:** 
+    - **MemTable:** Mutable in-memory map.
+    - **WAL:** Crash recovery (auto-load on startup).
+    - **SSTable:** Immutable disk files (Flushed >100 keys).
+    - **Bloom Filters:** Fast lookups (skip disk if key missing).
+    - **Compaction:** Background merge of SSTables (1-min interval).
+- **Network:** gRPC + Protobuf (Binary Protocol).
 
-### Limitations (MVP)
-- **Crash Recovery:** WAL replay on startup is currently a "Future Work" item (Data persists to disk but isn't auto-loaded).
-- **Cluster Membership:** Static configuration.
+### Limitations (Educational Scope)
+- **Cluster Membership:** Static configuration (peers defined at startup).
+- **Snapshotting:** Raft logs grow indefinitely (Log Compaction not implemented, but Storage Compaction is).
 
 ## 📝 License
 MIT

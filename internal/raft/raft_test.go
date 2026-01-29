@@ -1,8 +1,8 @@
 package raft_test
 
 import (
-	"testing"
 	"distrokv/internal/raft"
+	"testing"
 )
 
 func TestRaftGeneric(t *testing.T) {

@@ -5,6 +5,7 @@ import (
 	"encoding/gob"
 	"log"
 	"net"
+	"time"
 
 	"distrokv/internal/lsm"
 	"distrokv/internal/raft"
@@ -69,6 +70,9 @@ func (s *Server) Start(port string) error {
 
 	// Start FSM Applicator (Consumer)
 	go s.applyCommits()
+
+	// Phase 5: Start Background Compaction
+	s.lsmStore.StartCompactionTrigger(1 * time.Minute)
 
 	// Start gRPC Listener
 	lis, err := net.Listen("tcp", port)
