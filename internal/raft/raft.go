@@ -2,9 +2,18 @@ package raft
 
 import (
 	"distrokv/proto"
-	"log"
+	"fmt"
 	"sync"
 	"time"
+)
+
+const (
+	colorReset   = "\033[0m"
+	colorGreen   = "\033[32m"
+	colorYellow  = "\033[33m"
+	colorBlue    = "\033[34m"
+	colorMagenta = "\033[35m"
+	colorBold    = "\033[1m"
 )
 
 type State int
@@ -124,14 +133,16 @@ func (r *Raft) startElection() {
 	// MVP: If we are the only node (no peers implementation yet), we win immediately.
 	// In a real implementation, we would send RequestVote to r.peers.
 	// Since we haven't implemented peer config, let's assume single-node mode for the walkthrough.
-	log.Printf("[%s] Starting election for term %d...", r.id, r.currentTerm)
+	fmt.Printf("%s%s⚡ ELECTION%s [%s] Starting election for term %s%d%s\n",
+		colorBold, colorYellow, colorReset, r.id, colorYellow, r.currentTerm, colorReset)
 	r.becomeLeader()
 }
 
 func (r *Raft) becomeLeader() {
 	r.state = Leader
 	r.leaderId = r.id
-	log.Printf("[%s] Became Leader at term %d", r.id, r.currentTerm)
+	fmt.Printf("%s%s👑 LEADER%s [%s] Became Leader at term %s%d%s\n",
+		colorBold, colorGreen, colorReset, r.id, colorGreen, r.currentTerm, colorReset)
 	go r.startLeaderLoop()
 }
 
@@ -163,7 +174,7 @@ func (r *Raft) startLeaderLoop() {
 					// Let's rely on the entry's internal index.
 					entry := r.log[i]
 					r.commitCh <- entry
-					log.Printf("[%s] Leader Committed Index %d", r.id, entry.Index)
+					fmt.Printf("%s│ COMMIT%s Index %s%d%s\n", colorMagenta, colorReset, colorBlue, entry.Index, colorReset)
 				}
 				r.commitIndex = lastLogIndex
 			}

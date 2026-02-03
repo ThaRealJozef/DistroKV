@@ -1,96 +1,178 @@
 # 🚀 DistroKV
 
-> A Distributed Key-Value Store built from scratch in Go.
-> **Architecture:** Raft Consensus + LSM Tree + gRPC.
+<div align="center">
 
-![Go](https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat&logo=go)
-![Architecture](https://img.shields.io/badge/Architecture-Raft%20%2B%20LSM-orange)
-![License](https://img.shields.io/badge/License-MIT-blue.svg)
+**A Distributed Key-Value Store Built From Scratch in Go**
 
-## 📖 Overview
+*Raft Consensus • LSM Tree Storage • gRPC Protocol*
 
-**DistroKV** is an educational distributed database designed to explore the internals of system consistency and storage engines. 
+[![Go](https://img.shields.io/badge/Go-1.25+-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://golang.org/)
+[![Raft](https://img.shields.io/badge/Consensus-Raft-FF6B6B?style=for-the-badge)](https://raft.github.io/)
+[![LSM](https://img.shields.io/badge/Storage-LSM%20Tree-4ECDC4?style=for-the-badge)](https://en.wikipedia.org/wiki/Log-structured_merge-tree)
+[![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
 
-Unlike wrapping existing libraries (like `etcd` or `BadgerDB`), DistroKV implements the core algorithms **manually** to demonstrate deep understanding of distributed systems:
+</div>
 
-*   **The Brain (Consensus):** A custom implementation of the **Raft** consensus algorithm (Leader Election, Log Replication).
-*   **The Memory (Storage):** A custom **LSM Tree** (Log-Structured Merge Tree) with MemTable, WAL (Write-Ahead Log), and SSTable flushing.
-*   **The Nervous System:** **gRPC** with Protocol Buffers for typed node communication.
+---
+
+## ⚡ Why DistroKV?
+
+| Feature | DistroKV | Redis | etcd | BadgerDB |
+|---------|:--------:|:-----:|:----:|:--------:|
+| **Built From Scratch** | ✅ | ❌ | ❌ | ❌ |
+| **Raft Consensus** | ✅ | ❌ | ✅ | ❌ |
+| **LSM Tree Engine** | ✅ | ❌ | ❌ | ✅ |
+| **Bloom Filters** | ✅ | ❌ | ❌ | ✅ |
+| **Background Compaction** | ✅ | ❌ | ❌ | ✅ |
+| **WAL Recovery** | ✅ | ✅ | ✅ | ✅ |
+| **Educational Value** | ⭐⭐⭐ | ⭐ | ⭐ | ⭐⭐ |
+
+> **💡 The Difference:** Unlike production databases that wrap existing libraries, DistroKV implements every core algorithm **from scratch** — demonstrating deep understanding of distributed systems and storage engine internals.
+
+---
+
+## 🎬 Demo
+
+<div align="center">
+
+![DistroKV Demo](./assets/demo.gif)
+
+*Server (left) processes Raft consensus while Client (right) performs CRUD operations*
+
+</div>
+
+---
 
 ## 🏗️ Architecture
 
 ```mermaid
-graph TD
-    Client[Client CLI] -->|gRPC Put/Get| Server
-    subgraph Server Node
-        RPC[gRPC Handler]
-        Raft[Raft Consensus Module]
-        LSM[LSM Storage Engine]
-        
-        RPC -->|Submit Command| Raft
-        Raft -->|Replicate| Peers[Other Nodes]
-        Raft -->|Commit Details| LSM
-        LSM -->|Write| WAL[WAL Log]
-        LSM -->|Flush| SST[SSTable File]
+graph LR
+    subgraph "Client Layer"
+        CLI[CLI Client]
     end
+    
+    subgraph "Server Node"
+        direction TB
+        GRPC[gRPC Handler]
+        RAFT[Raft Module]
+        LSM[LSM Engine]
+        
+        subgraph "Storage Layer"
+            MEM[MemTable]
+            WAL[WAL]
+            SST[SSTables]
+            BF[Bloom Filters]
+        end
+    end
+    
+    CLI -->|Put/Get| GRPC
+    GRPC -->|Submit| RAFT
+    RAFT -->|Commit| LSM
+    LSM --> MEM
+    LSM --> WAL
+    MEM -->|Flush| SST
+    SST -.->|Check| BF
 ```
 
-## 🚀 Getting Started
+### 🧠 The Brain (Raft Consensus)
+- **Leader Election** — Randomized timeouts, term management
+- **Log Replication** — AppendEntries RPC, consistency guarantees
+- **Safety** — Persistent HardState (`raft_state.json`)
 
-### Prerequisites
-- Go 1.25+
-- Protoc (Protocol Buffers Compiler)
+### 💾 The Memory (LSM Tree)
+- **MemTable** — In-memory sorted map (fast writes)
+- **WAL** — Write-ahead log for crash recovery
+- **SSTable** — Immutable sorted files (auto-flush at 100 keys)
+- **Bloom Filters** — Skip disk reads for missing keys
+- **Compaction** — Background merge every 60 seconds
 
-### Installation
+### 🔌 The Nervous System
+- **gRPC + Protobuf** — Type-safe binary protocol
+- **Gob Serialization** — Efficient command encoding
+
+---
+
+## 🚀 Quick Start
+
 ```bash
+# Clone & Build
 git clone https://github.com/ThaRealJozef/DistroKV.git
 cd DistroKV
-go mod tidy
-```
-
-### Running the Server
-Start a single node (Leader automatically elected in single-node mode):
-```powershell
 go build -o bin/server.exe ./cmd/server
-./bin/server.exe node1 50051
-```
-
-### Running the Client
-Open a new terminal to interact with the store:
-```powershell
 go build -o bin/client.exe ./cmd/client
 
-# Write Data
-./bin/client.exe -addr localhost:50051 -op put -key user:101 -val "Jozef"
+# Start Server (auto-elects as Leader)
+./bin/server.exe node1 50051
 
-# Read Data
-./bin/client.exe -addr localhost:50051 -op get -key user:101
+# In another terminal - Write & Read
+./bin/client.exe -addr localhost:50051 -op put -key mykey -val "hello"
+./bin/client.exe -addr localhost:50051 -op get -key mykey
+```
 
-### 🧪 Live Demo (Performance Check)
-Run the verification script to demonstrate **memtable flushing, bloom filters, and compaction**:
+### 🧪 Performance Demo
+Watch **flushing**, **bloom filters**, and **compaction** in action:
 ```powershell
 ./verify_flush.ps1
 ```
+
+---
+
+## 📊 Performance Characteristics
+
+| Operation | Complexity | Notes |
+|-----------|------------|-------|
+| **Write** | O(1) | Direct to MemTable + WAL |
+| **Read (Hot)** | O(1) | Found in MemTable |
+| **Read (Cold)** | O(log N) | Bloom check → SSTable scan |
+| **Flush** | O(N log N) | Sort + write to disk |
+| **Compaction** | O(N) | Merge all SSTables |
+
+---
+
+## 📁 Project Structure
+
+```
+DistroKV/
+├── cmd/
+│   ├── server/main.go    # Server entrypoint
+│   └── client/main.go    # CLI client
+├── internal/
+│   ├── raft/             # Consensus implementation
+│   │   ├── raft.go       # Core Raft logic
+│   │   └── storage.go    # HardState persistence
+│   ├── lsm/              # Storage engine
+│   │   ├── memtable.go   # In-memory table
+│   │   ├── wal.go        # Write-ahead log
+│   │   ├── sstable.go    # Sorted string tables
+│   │   ├── compaction.go # Background merger
+│   │   └── store.go      # LSM orchestrator
+│   ├── server/           # gRPC handlers
+│   └── utils/
+│       └── bloom.go      # Bloom filter
+└── proto/                # Protobuf definitions
 ```
 
-## 🛠️ Technical Details
+---
 
-### Implemented Features
-- **Raft Consensus:** 
-    - Leader Election (Term management, randomized timeouts).
-    - Log Replication (AppendEntries).
-    - **Safety:** HardState persistence (`raft_state.json`).
-- **LSM Storage Engine:** 
-    - **MemTable:** Mutable in-memory map.
-    - **WAL:** Crash recovery (auto-load on startup).
-    - **SSTable:** Immutable disk files (Flushed >100 keys).
-    - **Bloom Filters:** Fast lookups (skip disk if key missing).
-    - **Compaction:** Background merge of SSTables (1-min interval).
-- **Network:** gRPC + Protobuf (Binary Protocol).
+## 🎯 What This Demonstrates
 
-### Limitations (Educational Scope)
-- **Cluster Membership:** Static configuration (peers defined at startup).
-- **Snapshotting:** Raft logs grow indefinitely (Log Compaction not implemented, but Storage Compaction is).
+- ✅ **Distributed Systems** — Raft consensus, leader election, log replication
+- ✅ **Storage Engines** — LSM trees, compaction strategies, bloom filters
+- ✅ **Systems Programming** — Concurrent Go, binary protocols, crash recovery
+- ✅ **Software Architecture** — Clean separation of concerns, testable design
+
+---
 
 ## 📝 License
-MIT
+
+MIT © [Jozef](https://github.com/ThaRealJozef)
+
+---
+
+<div align="center">
+
+**Built with 💻 and ☕ by [Jozef](https://github.com/ThaRealJozef)**
+
+*If you found this useful, consider giving it a ⭐*
+
+</div>

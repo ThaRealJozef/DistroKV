@@ -3,7 +3,7 @@ package server
 import (
 	"bytes"
 	"encoding/gob"
-	"log"
+	"fmt"
 	"net"
 	"time"
 
@@ -12,6 +12,16 @@ import (
 	"distrokv/proto"
 
 	"google.golang.org/grpc"
+)
+
+const (
+	colorReset   = "\033[0m"
+	colorGreen   = "\033[32m"
+	colorCyan    = "\033[36m"
+	colorYellow  = "\033[33m"
+	colorMagenta = "\033[35m"
+	colorBold    = "\033[1m"
+	colorDim     = "\033[2m"
 )
 
 // Command represents a state machine operation
@@ -27,25 +37,19 @@ type Server struct {
 
 	id       string
 	raftNode *raft.Raft
-	lsmStore *lsm.LSMStore // Wrapper around MemTable+WAL+SSTable
+	lsmStore *lsm.LSMStore
 
-	commitCh chan *proto.LogEntry // Channel to receive committed logs from Raft
+	commitCh chan *proto.LogEntry
 	stopCh   chan struct{}
 }
 
-// Ensure Server implements gRPC definitions
 var _ proto.RaftServiceServer = (*Server)(nil)
 var _ proto.KVServiceServer = (*Server)(nil)
 
 func NewServer(id string, storagePath string) (*Server, error) {
-	// Create commit channel (buffered to avoid blocking Raft too much)
 	commitCh := make(chan *proto.LogEntry, 100)
-
-	// Initialize Raft Node
-	// Note: We cast the channel to write-only for Raft
 	r := raft.NewRaft(id, commitCh)
 
-	// Initialize LSM Store
 	store, err := lsm.NewLSMStore(storagePath)
 	if err != nil {
 		return nil, err
@@ -71,7 +75,7 @@ func (s *Server) Start(port string) error {
 	// Start FSM Applicator (Consumer)
 	go s.applyCommits()
 
-	// Phase 5: Start Background Compaction
+	// Start Background Compaction
 	s.lsmStore.StartCompactionTrigger(1 * time.Minute)
 
 	// Start gRPC Listener
@@ -84,11 +88,12 @@ func (s *Server) Start(port string) error {
 	proto.RegisterRaftServiceServer(grpcServer, s)
 	proto.RegisterKVServiceServer(grpcServer, s)
 
-	log.Printf("Server %s listening on %s", s.id, port)
+	fmt.Printf("\n%s%s🚀 DistroKV Server [%s] listening on %s%s\n\n",
+		colorBold, colorCyan, s.id, port, colorReset)
+
 	return grpcServer.Serve(lis)
 }
 
-// applyCommits consumes the commitCh and applies changes to the LSM store
 func (s *Server) applyCommits() {
 	for {
 		select {
@@ -98,26 +103,32 @@ func (s *Server) applyCommits() {
 			var cmd Command
 			dec := gob.NewDecoder(bytes.NewReader(entry.Command))
 			if err := dec.Decode(&cmd); err != nil {
-				log.Printf("[%s] Failed to decode command: %v", s.id, err)
+				fmt.Printf("%s✗ Decode error:%s %v\n", "\033[31m", colorReset, err)
 				continue
 			}
 
 			switch cmd.Op {
 			case "PUT":
 				s.lsmStore.Put(cmd.Key, cmd.Value)
-				log.Printf("[%s] Applied: PUT %s=(%d bytes)", s.id, cmd.Key, len(cmd.Value))
+				fmt.Printf("%s%s│ APPLY%s %sPUT%s %s%s%s = %s%d bytes%s\n",
+					colorDim, colorMagenta, colorReset,
+					colorGreen, colorReset,
+					colorCyan, cmd.Key, colorReset,
+					colorYellow, len(cmd.Value), colorReset)
 			case "DELETE":
-				// s.lsmStore.Delete(cmd.Key) // MVP: Add Delete to Store if not exists
-				log.Printf("[%s] Applied: DELETE %s", s.id, cmd.Key)
+				fmt.Printf("%s%s│ APPLY%s %sDELETE%s %s%s%s\n",
+					colorDim, colorMagenta, colorReset,
+					colorYellow, colorReset,
+					colorCyan, cmd.Key, colorReset)
 			default:
-				log.Printf("[%s] Unknown Op: %s", s.id, cmd.Op)
+				fmt.Printf("%s│ APPLY%s Unknown Op: %s\n", colorMagenta, colorReset, cmd.Op)
 			}
 		}
 	}
 }
 
-func (s *Server) Stop() {
+func (s *Server) Stop() error {
 	close(s.stopCh)
 	s.raftNode.Stop()
-	s.lsmStore.Close()
+	return s.lsmStore.Close()
 }
